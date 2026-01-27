@@ -1,0 +1,25 @@
+name: voxel51/davis-2017
+type: dataset
+author: Federico Perazzi, Jordi Pont-Tuset
+version: 1.0.0
+url: https://github.com/voxel51/davis-2017
+source: https://davischallenge.org/davis2017/code.html
+license: https://github.com/davisvideochallenge/davis2017-evaluation/blob/master/LICENSE
+description: The DAVIS-2017 dataset - Densely Annotated Video Segmentation semi-supervised challenge data
+fiftyone:
+  version: "*"
+supports_partial_downloads: false
+tags:
+  - image
+  - segmentation
+  - detection
+splits:
+  - train
+  - validation
+  - test-dev
+  - test-challenge
+size_samples:
+  - train: 4209
+  - validation: 1999
+  - test-dev: 2086
+  - test-challenge: 2180
