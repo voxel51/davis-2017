@@ -14,7 +14,7 @@ from typing import Tuple
 import fiftyone as fo
 import fiftyone.core.labels as fol
 
-from davis import DAVIS
+from .davis import DAVIS
 
 
 SPLIT_TO_PATH = {
@@ -62,7 +62,7 @@ def download_and_prepare(dataset_dir, split=None, **kwargs):
         # Check if dataset_dir is split-specific (ends with split name)
         if dataset_dir.endswith(split):
             base_dir = os.path.dirname(dataset_dir)
-    
+
     # Create directory structure
     os.makedirs(base_dir, exist_ok=True)
     os.makedirs(dataset_dir, exist_ok=True)
@@ -81,7 +81,7 @@ def download_and_prepare(dataset_dir, split=None, **kwargs):
             # Only add unique zips (train and validation share the same zip)
             if not any(z[0] == zip_name for z in zips_to_download):
                 zips_to_download.append((zip_name, fo_split))
-    
+
     for zip_filename, zip_split in zips_to_download:
         # Download to base directory (shared location)
         zip_path = os.path.join(base_dir, zip_filename)
@@ -94,9 +94,7 @@ def download_and_prepare(dataset_dir, split=None, **kwargs):
                 urllib.request.urlretrieve(zip_url, zip_path)
                 print(f"Downloaded {zip_filename}")
             except Exception as e:
-                raise RuntimeError(
-                    f"Failed to download {zip_url}: {e}"
-                ) from e
+                raise RuntimeError(f"Failed to download {zip_url}: {e}") from e
         else:
             print(f"{zip_filename} already exists, skipping download")
 
@@ -110,14 +108,15 @@ def download_and_prepare(dataset_dir, split=None, **kwargs):
             try:
                 # Extract to a temporary location first
                 temp_extract = os.path.join(extract_dir, "_temp_extract")
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                with zipfile.ZipFile(zip_path, "r") as zip_ref:
                     zip_ref.extractall(temp_extract)
-                
+
                 # The zip contains a DAVIS folder, move its contents up one level
                 temp_davis = os.path.join(temp_extract, "DAVIS")
                 if os.path.exists(temp_davis):
                     # Move contents of DAVIS folder to extract_dir
                     import shutil
+
                     for item in os.listdir(temp_davis):
                         src = os.path.join(temp_davis, item)
                         dst = os.path.join(extract_dir, item)
@@ -135,32 +134,34 @@ def download_and_prepare(dataset_dir, split=None, **kwargs):
                             shutil.rmtree(dst) if os.path.isdir(dst) else os.remove(dst)
                         shutil.move(src, dst)
                     os.rmdir(temp_extract)
-                
+
                 print(f"Extracted {zip_filename}")
             except Exception as e:
-                raise RuntimeError(
-                    f"Failed to extract {zip_path}: {e}"
-                ) from e
+                raise RuntimeError(f"Failed to extract {zip_path}: {e}") from e
         else:
             print(f"Data already extracted to {extract_dir}, skipping extraction")
-    
+
     # Verify extraction
     num_samples = 0
     splits_to_count = [split] if split else SPLIT_TO_PATH.keys()
     for split in splits_to_count:
         imagesets_file = os.path.join(
-            base_dir, SPLIT_TO_PATH[split], "ImageSets", "2017", f"{SPLIT_TO_DAVIS_SPLIT(split)}.txt"
+            base_dir,
+            SPLIT_TO_PATH[split],
+            "ImageSets",
+            "2017",
+            f"{SPLIT_TO_DAVIS_SPLIT(split)}.txt",
         )
         if os.path.exists(imagesets_file):
-            with open(imagesets_file, 'r') as f:
+            with open(imagesets_file, "r") as f:
                 sequences = [line.strip() for line in f if line.strip()]
                 num_samples += len(sequences)
-    
+
     # Return None to indicate custom loader will be used
     return None, num_samples, None
 
 
-def load_dataset(dataset, dataset_dir, split=None, **kwargs):
+def load_dataset(dataset, dataset_dir, split=None, format="image", **kwargs):
     """Loads the dataset into the given FiftyOne dataset.
 
     Args:
@@ -170,7 +171,7 @@ def load_dataset(dataset, dataset_dir, split=None, **kwargs):
             ``("train", "validation", "test-dev", "test-challenge")``
         **kwargs: optional keyword arguments that your dataset can define to
             configure what/how the load is performed
-    
+
     DAVIS-2017 structure:
     dataset_dir/
         split_dir/
@@ -198,13 +199,14 @@ def load_dataset(dataset, dataset_dir, split=None, **kwargs):
         davis_split = SPLIT_TO_DAVIS_SPLIT(split)
         davis_split_object = DAVIS(root=split_dir, subset=davis_split)
 
-        format = kwargs.get("format", "image")
         if format == "image":
             _load_image_dataset(dataset, davis_split_object)
         elif format == "video":
             _load_video_dataset(dataset, davis_split_object)
         else:
-            raise ValueError(f"Invalid format: {format}. Must be one of ['image', 'video']")
+            raise ValueError(
+                f"Invalid format: {format}. Must be one of ['image', 'video']"
+            )
 
 
 def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
@@ -224,8 +226,10 @@ def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
 
             filepath = os.path.join(
                 davis_split_object.root,
-                "JPEGImages", "480p",
-                seq, f"{image_frame_number}.jpg"
+                "JPEGImages",
+                "480p",
+                seq,
+                f"{image_frame_number}.jpg",
             )
             assert os.path.exists(filepath)
 
@@ -233,23 +237,30 @@ def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
 
             num_classes = int(np.max(mask))
             for cc in range(num_classes):
-                mask_cc = (mask == cc+1).astype(np.uint8)
+                mask_cc = (mask == cc + 1).astype(np.uint8)
                 bounding_box = cv2.boundingRect(mask_cc)
                 if np.sum(mask_cc) == 0:
                     rel_mask = None
                 else:
-                    rel_mask = mask_cc[bounding_box[1]:bounding_box[1]+bounding_box[3], bounding_box[0]:bounding_box[0]+bounding_box[2]]
-                
+                    rel_mask = mask_cc[
+                        bounding_box[1] : bounding_box[1] + bounding_box[3],
+                        bounding_box[0] : bounding_box[0] + bounding_box[2],
+                    ]
+
                 normalized_bounding_box = [
-                    bounding_box[0]/img.shape[1], bounding_box[1]/img.shape[0],
-                    bounding_box[2]/img.shape[1], bounding_box[3]/img.shape[0]
+                    bounding_box[0] / img.shape[1],
+                    bounding_box[1] / img.shape[0],
+                    bounding_box[2] / img.shape[1],
+                    bounding_box[3] / img.shape[0],
                 ]
-                detections.append(fo.Detection(
-                    bounding_box=normalized_bounding_box,
-                    mask=rel_mask,
-                    label=seq+str(cc),
-                ))
-        
+                detections.append(
+                    fo.Detection(
+                        bounding_box=normalized_bounding_box,
+                        mask=rel_mask,
+                        label=seq + str(cc),
+                    )
+                )
+
             # Create sample with metadata
             sample = fo.Sample(
                 filepath=str(filepath),
@@ -257,7 +268,7 @@ def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
                 frame_number=image_frame_number,
                 ground_truth=fo.Detections(detections=detections),
             )
-            
+
             dataset.add_sample(sample)
 
 

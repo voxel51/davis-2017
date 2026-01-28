@@ -6,12 +6,20 @@ from PIL import Image
 
 
 class DAVIS(object):
-    SUBSET_OPTIONS = ['train', 'val', 'test-dev', 'test-challenge']
-    TASKS = ['semi-supervised', 'unsupervised']
-    DATASET_WEB = 'https://davischallenge.org/davis2017/code.html'
+    SUBSET_OPTIONS = ["train", "val", "test-dev", "test-challenge"]
+    TASKS = ["semi-supervised", "unsupervised"]
+    DATASET_WEB = "https://davischallenge.org/davis2017/code.html"
     VOID_LABEL = 255
 
-    def __init__(self, root, task='semi-supervised', subset='val', sequences='all', resolution='480p', codalab=False):
+    def __init__(
+        self,
+        root,
+        task="semi-supervised",
+        subset="val",
+        sequences="all",
+        resolution="480p",
+        codalab=False,
+    ):
         """
         Class to read the DAVIS dataset
         :param root: Path to the DAVIS folder that contains JPEGImages, Annotations, etc. folders.
@@ -21,23 +29,32 @@ class DAVIS(object):
         :param resolution: Specify the resolution to use the dataset, choose between '480' and 'Full-Resolution'
         """
         if subset not in self.SUBSET_OPTIONS:
-            raise ValueError(f'Subset should be in {self.SUBSET_OPTIONS}')
+            raise ValueError(f"Subset should be in {self.SUBSET_OPTIONS}")
         if task not in self.TASKS:
-            raise ValueError(f'The only tasks that are supported are {self.TASKS}')
+            raise ValueError(f"The only tasks that are supported are {self.TASKS}")
 
         self.task = task
         self.subset = subset
         self.root = root
-        self.img_path = os.path.join(self.root, 'JPEGImages', resolution)
-        annotations_folder = 'Annotations' if task == 'semi-supervised' else 'Annotations_unsupervised'
+        self.img_path = os.path.join(self.root, "JPEGImages", resolution)
+        annotations_folder = (
+            "Annotations" if task == "semi-supervised" else "Annotations_unsupervised"
+        )
         self.mask_path = os.path.join(self.root, annotations_folder, resolution)
-        year = '2019' if task == 'unsupervised' and (subset == 'test-dev' or subset == 'test-challenge') else '2017'
-        self.imagesets_path = os.path.join(self.root, 'ImageSets', year)
+        year = (
+            "2019"
+            if task == "unsupervised"
+            and (subset == "test-dev" or subset == "test-challenge")
+            else "2017"
+        )
+        self.imagesets_path = os.path.join(self.root, "ImageSets", year)
 
         self._check_directories()
 
-        if sequences == 'all':
-            with open(os.path.join(self.imagesets_path, f'{self.subset}.txt'), 'r') as f:
+        if sequences == "all":
+            with open(
+                os.path.join(self.imagesets_path, f"{self.subset}.txt"), "r"
+            ) as f:
                 tmp = f.readlines()
             sequences_names = [x.strip() for x in tmp]
         else:
@@ -45,25 +62,33 @@ class DAVIS(object):
         self.sequences = defaultdict(dict)
 
         for seq in sequences_names:
-            images = np.sort(glob(os.path.join(self.img_path, seq, '*.jpg'))).tolist()
+            images = np.sort(glob(os.path.join(self.img_path, seq, "*.jpg"))).tolist()
             if len(images) == 0 and not codalab:
-                raise FileNotFoundError(f'Images for sequence {seq} not found.')
-            self.sequences[seq]['images'] = images
-            masks = np.sort(glob(os.path.join(self.mask_path, seq, '*.png'))).tolist()
+                raise FileNotFoundError(f"Images for sequence {seq} not found.")
+            self.sequences[seq]["images"] = images
+            masks = np.sort(glob(os.path.join(self.mask_path, seq, "*.png"))).tolist()
             masks.extend([-1] * (len(images) - len(masks)))
-            self.sequences[seq]['masks'] = masks
+            self.sequences[seq]["masks"] = masks
 
     def _check_directories(self):
         if not os.path.exists(self.root):
-            raise FileNotFoundError(f'DAVIS not found in the specified directory, download it from {self.DATASET_WEB}')
-        if not os.path.exists(os.path.join(self.imagesets_path, f'{self.subset}.txt')):
-            raise FileNotFoundError(f'Subset sequences list for {self.subset} not found, download the missing subset '
-                                    f'for the {self.task} task from {self.DATASET_WEB}')
-        if self.subset in ['train', 'val'] and not os.path.exists(self.mask_path):
-            raise FileNotFoundError(f'Annotations folder for the {self.task} task not found, download it from {self.DATASET_WEB}')
+            raise FileNotFoundError(
+                f"DAVIS not found in the specified directory, download it from {self.DATASET_WEB}"
+            )
+        if not os.path.exists(os.path.join(self.imagesets_path, f"{self.subset}.txt")):
+            raise FileNotFoundError(
+                f"Subset sequences list for {self.subset} not found, download the missing subset "
+                f"for the {self.task} task from {self.DATASET_WEB}"
+            )
+        if self.subset in ["train", "val"] and not os.path.exists(self.mask_path):
+            raise FileNotFoundError(
+                f"Annotations folder for the {self.task} task not found, download it from {self.DATASET_WEB}"
+            )
 
     def get_frames(self, sequence):
-        for img, msk in zip(self.sequences[sequence]['images'], self.sequences[sequence]['masks']):
+        for img, msk in zip(
+            self.sequences[sequence]["images"], self.sequences[sequence]["masks"]
+        ):
             image = np.array(Image.open(img))
             mask = None if msk is None else np.array(Image.open(msk))
             yield image, mask
@@ -76,14 +101,14 @@ class DAVIS(object):
             if obj == -1:
                 continue
             all_objs[i, ...] = np.array(Image.open(obj))
-            obj_id.append(''.join(obj.split('/')[-1].split('.')[:-1]))
+            obj_id.append("".join(obj.split("/")[-1].split(".")[:-1]))
         return all_objs, obj_id
 
     def get_all_images(self, sequence):
-        return self._get_all_elements(sequence, 'images')
+        return self._get_all_elements(sequence, "images")
 
     def get_all_masks(self, sequence, separate_objects_masks=False):
-        masks, masks_id = self._get_all_elements(sequence, 'masks')
+        masks, masks_id = self._get_all_elements(sequence, "masks")
         masks_void = np.zeros_like(masks)
 
         # Separate void and object masks
@@ -95,7 +120,7 @@ class DAVIS(object):
             num_objects = int(np.max(masks[0, ...]))
             tmp = np.ones((num_objects, *masks.shape))
             tmp = tmp * np.arange(1, num_objects + 1)[:, None, None, None]
-            masks = (tmp == masks[None, ...])
+            masks = tmp == masks[None, ...]
             masks = masks > 0
         return masks, masks_void, masks_id
 
@@ -104,10 +129,10 @@ class DAVIS(object):
             yield seq
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from matplotlib import pyplot as plt
 
-    subsets = ['train', 'val']
+    subsets = ["train", "val"]
 
     # # only first frame
     # for s in subsets:
@@ -124,7 +149,7 @@ if __name__ == '__main__':
 
     # all frames of the first sequence
     for s in subsets:
-        dataset = DAVIS(root='DAVIS-train-val', subset=s)
+        dataset = DAVIS(root="DAVIS-train-val", subset=s)
         for seq in dataset.get_sequences():
             break
         images = dataset.get_all_images(seq)
