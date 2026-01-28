@@ -205,7 +205,7 @@ def load_dataset(dataset, dataset_dir, split=None, **kwargs):
             _load_video_dataset(dataset, davis_split_object)
         else:
             raise ValueError(f"Invalid format: {format}. Must be one of ['image', 'video']")
-    
+
 
 def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
     """
