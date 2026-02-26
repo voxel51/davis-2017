@@ -201,6 +201,9 @@ def load_dataset(dataset, dataset_dir, split=None, format="image", **kwargs):
 
         if format == "image":
             _load_image_dataset(dataset, davis_split_object)
+        elif format == "group":
+            _load_image_dataset(dataset, davis_split_object)
+            dataset = dataset.group_by("scene_id", order_by="frame_number")
         elif format == "video":
             _load_video_dataset(dataset, davis_split_object)
         else:
@@ -265,6 +268,7 @@ def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
             sample = fo.Sample(
                 filepath=str(filepath),
                 tags=[davis_split_object.subset, seq],
+                scene_id=seq,
                 frame_number=image_frame_number,
                 ground_truth=fo.Detections(detections=detections),
             )
