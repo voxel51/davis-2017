@@ -42,6 +42,8 @@ session = fo.launch_app(dataset)
 Each image is tagged with its split, and with its sequence name -- images from a "sequence" are from a single video clip.
 Sequences do not overlap across splits.
 
-The bounding box and segmentation mask is stored in the `ground_truth` field
+The bounding box and segmentation mask is stored in the `ground_truth` field.
+
+Below is an example of the dataset loaded in `image` format. Coming soon: `group` and `video` formats.
 
 ![DAVIS Sample Visualization](assets/davis_grid.png)

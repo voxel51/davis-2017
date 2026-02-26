@@ -10,6 +10,7 @@ import os
 import numpy as np
 import cv2
 from typing import Tuple
+from collections import defaultdict
 
 import fiftyone as fo
 import fiftyone.core.labels as fol
@@ -121,7 +122,9 @@ def download_and_prepare(dataset_dir, split=None, **kwargs):
                         src = os.path.join(temp_davis, item)
                         dst = os.path.join(extract_dir, item)
                         if os.path.exists(dst):
-                            shutil.rmtree(dst) if os.path.isdir(dst) else os.remove(dst)
+                            shutil.rmtree(dst) if os.path.isdir(
+                                dst
+                            ) else os.remove(dst)
                         shutil.move(src, dst)
                     # Remove temporary extraction directory
                     shutil.rmtree(temp_extract)
@@ -131,7 +134,9 @@ def download_and_prepare(dataset_dir, split=None, **kwargs):
                         src = os.path.join(temp_extract, item)
                         dst = os.path.join(extract_dir, item)
                         if os.path.exists(dst):
-                            shutil.rmtree(dst) if os.path.isdir(dst) else os.remove(dst)
+                            shutil.rmtree(dst) if os.path.isdir(
+                                dst
+                            ) else os.remove(dst)
                         shutil.move(src, dst)
                     os.rmdir(temp_extract)
 
@@ -139,7 +144,9 @@ def download_and_prepare(dataset_dir, split=None, **kwargs):
             except Exception as e:
                 raise RuntimeError(f"Failed to extract {zip_path}: {e}") from e
         else:
-            print(f"Data already extracted to {extract_dir}, skipping extraction")
+            print(
+                f"Data already extracted to {extract_dir}, skipping extraction"
+            )
 
     # Verify extraction
     num_samples = 0
@@ -161,7 +168,7 @@ def download_and_prepare(dataset_dir, split=None, **kwargs):
     return None, num_samples, None
 
 
-def load_dataset(dataset, dataset_dir, split=None, format="image", **kwargs):
+def load_dataset(dataset, dataset_dir, split=None, format="group", **kwargs):
     """Loads the dataset into the given FiftyOne dataset.
 
     Args:
@@ -199,17 +206,24 @@ def load_dataset(dataset, dataset_dir, split=None, format="image", **kwargs):
         davis_split = SPLIT_TO_DAVIS_SPLIT(split)
         davis_split_object = DAVIS(root=split_dir, subset=davis_split)
 
+        dataset.persistent = True
         if format == "image":
             _load_image_dataset(dataset, davis_split_object)
         elif format == "group":
+            # _load_group_dataset(dataset, davis_split_object)
             _load_image_dataset(dataset, davis_split_object)
-            dataset = dataset.group_by("scene_id", order_by="frame_number")
+            print("\n\n")
+            print("For a grouped view, run the following:")
+            print('view = dataset.group_by("sequence_id", order_by="frame_number")')
+            print("\n\n")
         elif format == "video":
             _load_video_dataset(dataset, davis_split_object)
         else:
             raise ValueError(
-                f"Invalid format: {format}. Must be one of ['image', 'video']"
+                f"Invalid format: {format}. Must be one of ['image', 'group', 'video']"
             )
+
+        dataset.persistent = True
 
 
 def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
@@ -219,11 +233,17 @@ def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
     """
     for seq in davis_split_object.get_sequences():
         images, image_frame_numbers = davis_split_object.get_all_images(seq)
-        masks, masks_void, mask_frame_numbers = davis_split_object.get_all_masks(seq)
+        (
+            masks,
+            masks_void,
+            mask_frame_numbers,
+        ) = davis_split_object.get_all_masks(seq)
         if "test" not in davis_split_object.subset:
             assert image_frame_numbers == mask_frame_numbers
 
-        for img, mask, image_frame_number in zip(images, masks, image_frame_numbers):
+        for img, mask, image_frame_number in zip(
+            images, masks, image_frame_numbers
+        ):
             img = img.astype(np.uint8)
             mask = mask.astype(np.uint8)
 
@@ -268,12 +288,36 @@ def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
             sample = fo.Sample(
                 filepath=str(filepath),
                 tags=[davis_split_object.subset, seq],
-                scene_id=seq,
+                sequence_id=seq,
                 frame_number=image_frame_number,
                 ground_truth=fo.Detections(detections=detections),
             )
 
             dataset.add_sample(sample)
+
+
+def _load_group_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
+    """
+    Note: This creates a grouped dataset, but does not support features that a grouped view does.
+    # TODO(neeraja): Workaround
+    """
+    temp_image_dataset = fo.Dataset()
+    _load_image_dataset(temp_image_dataset, davis_split_object)
+
+    dataset.add_group_field("sequence")
+
+    groups = defaultdict(fo.Group)
+    for sample in temp_image_dataset.iter_samples(progress=True):
+        group = groups[sample.sequence_id]
+        new_sample = fo.Sample(
+            filepath=sample.filepath,
+            ground_truth=sample.ground_truth,
+            sequence=group.element(sample.frame_number),
+            sequence_id=sample.sequence_id,
+            frame_number=sample.frame_number,
+            tags=sample.tags,
+        )
+        dataset.add_sample(new_sample)
 
 
 def _load_video_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
