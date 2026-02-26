@@ -31,16 +31,22 @@ class DAVIS(object):
         if subset not in self.SUBSET_OPTIONS:
             raise ValueError(f"Subset should be in {self.SUBSET_OPTIONS}")
         if task not in self.TASKS:
-            raise ValueError(f"The only tasks that are supported are {self.TASKS}")
+            raise ValueError(
+                f"The only tasks that are supported are {self.TASKS}"
+            )
 
         self.task = task
         self.subset = subset
         self.root = root
         self.img_path = os.path.join(self.root, "JPEGImages", resolution)
         annotations_folder = (
-            "Annotations" if task == "semi-supervised" else "Annotations_unsupervised"
+            "Annotations"
+            if task == "semi-supervised"
+            else "Annotations_unsupervised"
         )
-        self.mask_path = os.path.join(self.root, annotations_folder, resolution)
+        self.mask_path = os.path.join(
+            self.root, annotations_folder, resolution
+        )
         year = (
             "2019"
             if task == "unsupervised"
@@ -58,15 +64,23 @@ class DAVIS(object):
                 tmp = f.readlines()
             sequences_names = [x.strip() for x in tmp]
         else:
-            sequences_names = sequences if isinstance(sequences, list) else [sequences]
+            sequences_names = (
+                sequences if isinstance(sequences, list) else [sequences]
+            )
         self.sequences = defaultdict(dict)
 
         for seq in sequences_names:
-            images = np.sort(glob(os.path.join(self.img_path, seq, "*.jpg"))).tolist()
+            images = np.sort(
+                glob(os.path.join(self.img_path, seq, "*.jpg"))
+            ).tolist()
             if len(images) == 0 and not codalab:
-                raise FileNotFoundError(f"Images for sequence {seq} not found.")
+                raise FileNotFoundError(
+                    f"Images for sequence {seq} not found."
+                )
             self.sequences[seq]["images"] = images
-            masks = np.sort(glob(os.path.join(self.mask_path, seq, "*.png"))).tolist()
+            masks = np.sort(
+                glob(os.path.join(self.mask_path, seq, "*.png"))
+            ).tolist()
             masks.extend([-1] * (len(images) - len(masks)))
             self.sequences[seq]["masks"] = masks
 
@@ -75,19 +89,24 @@ class DAVIS(object):
             raise FileNotFoundError(
                 f"DAVIS not found in the specified directory, download it from {self.DATASET_WEB}"
             )
-        if not os.path.exists(os.path.join(self.imagesets_path, f"{self.subset}.txt")):
+        if not os.path.exists(
+            os.path.join(self.imagesets_path, f"{self.subset}.txt")
+        ):
             raise FileNotFoundError(
                 f"Subset sequences list for {self.subset} not found, download the missing subset "
                 f"for the {self.task} task from {self.DATASET_WEB}"
             )
-        if self.subset in ["train", "val"] and not os.path.exists(self.mask_path):
+        if self.subset in ["train", "val"] and not os.path.exists(
+            self.mask_path
+        ):
             raise FileNotFoundError(
                 f"Annotations folder for the {self.task} task not found, download it from {self.DATASET_WEB}"
             )
 
     def get_frames(self, sequence):
         for img, msk in zip(
-            self.sequences[sequence]["images"], self.sequences[sequence]["masks"]
+            self.sequences[sequence]["images"],
+            self.sequences[sequence]["masks"],
         ):
             image = np.array(Image.open(img))
             mask = None if msk is None else np.array(Image.open(msk))
@@ -95,7 +114,9 @@ class DAVIS(object):
 
     def _get_all_elements(self, sequence, obj_type):
         obj = np.array(Image.open(self.sequences[sequence][obj_type][0]))
-        all_objs = np.zeros((len(self.sequences[sequence][obj_type]), *obj.shape))
+        all_objs = np.zeros(
+            (len(self.sequences[sequence][obj_type]), *obj.shape)
+        )
         obj_id = []
         for i, obj in enumerate(self.sequences[sequence][obj_type]):
             if obj == -1:
