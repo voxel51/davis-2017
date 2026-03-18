@@ -44,6 +44,6 @@ Sequences do not overlap across splits.
 
 The bounding box and segmentation mask is stored in the `ground_truth` field.
 
-Below is an example of the dataset loaded in `image` format. Coming soon: `group` and `video` formats.
+Below is an example of the dataset loaded in `image` format. Coming soon: `video`.
 
 ![DAVIS Sample Visualization](assets/davis_grid.png)

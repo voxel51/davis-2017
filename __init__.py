@@ -7,10 +7,11 @@ annotations for the semi-supervised challenge.
 """
 
 import os
-import numpy as np
-import cv2
 from typing import Tuple
 from collections import defaultdict
+import numpy as np
+import cv2
+import imageio
 
 import fiftyone as fo
 import fiftyone.core.labels as fol
@@ -168,7 +169,7 @@ def download_and_prepare(dataset_dir, split=None, **kwargs):
     return None, num_samples, None
 
 
-def load_dataset(dataset, dataset_dir, split=None, format="group", **kwargs):
+def load_dataset(dataset, dataset_dir, split=None, format="image", **kwargs):
     """Loads the dataset into the given FiftyOne dataset.
 
     Args:
@@ -214,7 +215,9 @@ def load_dataset(dataset, dataset_dir, split=None, format="group", **kwargs):
             _load_image_dataset(dataset, davis_split_object)
             print("\n\n")
             print("For a grouped view, run the following:")
-            print('view = dataset.group_by("sequence_id", order_by="frame_number")')
+            print(
+                'view = dataset.group_by("sequence_id", order_by="frame_number")'
+            )
             print("\n\n")
         elif format == "video":
             _load_video_dataset(dataset, davis_split_object)
@@ -222,8 +225,6 @@ def load_dataset(dataset, dataset_dir, split=None, format="group", **kwargs):
             raise ValueError(
                 f"Invalid format: {format}. Must be one of ['image', 'group', 'video']"
             )
-
-        dataset.persistent = True
 
 
 def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
@@ -296,28 +297,16 @@ def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
             dataset.add_sample(sample)
 
 
-def _load_group_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
-    """
-    Note: This creates a grouped dataset, but does not support features that a grouped view does.
-    # TODO(neeraja): Workaround
-    """
-    temp_image_dataset = fo.Dataset()
-    _load_image_dataset(temp_image_dataset, davis_split_object)
-
-    dataset.add_group_field("sequence")
-
-    groups = defaultdict(fo.Group)
-    for sample in temp_image_dataset.iter_samples(progress=True):
-        group = groups[sample.sequence_id]
-        new_sample = fo.Sample(
-            filepath=sample.filepath,
-            ground_truth=sample.ground_truth,
-            sequence=group.element(sample.frame_number),
-            sequence_id=sample.sequence_id,
-            frame_number=sample.frame_number,
-            tags=sample.tags,
-        )
-        dataset.add_sample(new_sample)
+def _get_video_from_images(dataset_view):
+    dataset_view = dataset_view.sort_by("frame_number")
+    images_dir = "/".join(dataset_view.first()["filepath"].split("/")[:-1])
+    video_path = images_dir.replace("JPEGImages/480p/", "Videos/")
+    video_path += ".mp4"
+    if not os.path.exists(video_path):
+        with imageio.get_writer(video_path, fps=30) as writer:
+            for image in dataset_view:
+                writer.append_data(imageio.imread(image["filepath"]))
+    return video_path
 
 
 def _load_video_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
@@ -325,4 +314,56 @@ def _load_video_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
     Load the dataset object into the given FiftyOne dataset
     as a video dataset, with sequences as samples, and frame images as frames
     """
-    raise NotImplementedError("Video dataset loading not implemented yet")
+    image_dataset = fo.Dataset()
+    _load_image_dataset(image_dataset, davis_split_object)
+
+    image_dataset = image_dataset.group_by(
+        "sequence_id", order_by="frame_number"
+    )
+    for sequence_id in image_dataset.values("sequence_id"):
+        sequence_view = (
+            image_dataset.match_tags(sequence_id)
+            .sort_by("frame_number")
+            .flatten()
+        )
+        video_path = _get_video_from_images(sequence_view)
+        dataset.add_sample(
+            fo.Sample(
+                filepath=video_path,
+                tags=sequence_view.first()["tags"],
+                sequence_id=sequence_id,
+            )
+        )
+    dataset.ensure_frames()
+    dataset.compute_metadata()
+
+    frame_schema = image_dataset.get_field_schema()
+
+    for sequence_id in dataset.values("sequence_id"):  # type: ignore
+        video_sample = dataset.match_tags(sequence_id).first()
+        sequence_view = (
+            image_dataset.match_tags(sequence_id)
+            .sort_by("frame_number")
+            .flatten()
+        )
+        for image_sample, (frame_idx, frame) in zip(
+            sequence_view, video_sample.frames.items()
+        ):
+            for field_name in frame_schema.keys():
+                if field_name in [
+                    "id",
+                    "metadata",
+                    "created_at",
+                    "last_modified_at",
+                    "filepath",
+                    "tags",
+                    "sequence_id",
+                    "frame_number",
+                ]:
+                    continue
+                if image_sample[field_name] is None:
+                    continue
+                frame[field_name] = image_sample[field_name]
+            frame.save()
+    dataset.compute_metadata()
+    return dataset
