@@ -282,6 +282,7 @@ def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
                         bounding_box=normalized_bounding_box,
                         mask=rel_mask,
                         label=seq + str(cc),
+                        index=cc,
                     )
                 )
 
