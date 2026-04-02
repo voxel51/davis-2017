@@ -169,7 +169,7 @@ def download_and_prepare(dataset_dir, split=None, **kwargs):
     return None, num_samples, None
 
 
-def load_dataset(dataset, dataset_dir, split=None, format="image", **kwargs):
+def load_dataset(dataset, dataset_dir, split=None, format="image", max_samples=None, **kwargs):
     """Loads the dataset into the given FiftyOne dataset.
 
     Args:
@@ -209,10 +209,10 @@ def load_dataset(dataset, dataset_dir, split=None, format="image", **kwargs):
 
         dataset.persistent = True
         if format == "image":
-            _load_image_dataset(dataset, davis_split_object)
+            _load_image_dataset(dataset, davis_split_object, max_samples=max_samples)
         elif format == "group":
             # _load_group_dataset(dataset, davis_split_object)
-            _load_image_dataset(dataset, davis_split_object)
+            _load_image_dataset(dataset, davis_split_object, max_samples=max_samples)
             print("\n\n")
             print("For a grouped view, run the following:")
             print(
@@ -220,19 +220,22 @@ def load_dataset(dataset, dataset_dir, split=None, format="image", **kwargs):
             )
             print("\n\n")
         elif format == "video":
-            _load_video_dataset(dataset, davis_split_object)
+            _load_video_dataset(dataset, davis_split_object, max_samples=max_samples)
         else:
             raise ValueError(
                 f"Invalid format: {format}. Must be one of ['image', 'group', 'video']"
             )
 
 
-def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
+def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS, max_samples=None):
     """
     Load the dataset object into the given FiftyOne dataset
     as an image dataset, with sequence names as tags, and frame images as samples
     """
+    count = 0
     for seq in davis_split_object.get_sequences():
+        if max_samples is not None and count >= max_samples:
+            break
         images, image_frame_numbers = davis_split_object.get_all_images(seq)
         (
             masks,
@@ -245,6 +248,8 @@ def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
         for img, mask, image_frame_number in zip(
             images, masks, image_frame_numbers
         ):
+            if max_samples is not None and count >= max_samples:
+                break
             img = img.astype(np.uint8)
             mask = mask.astype(np.uint8)
 
@@ -296,6 +301,7 @@ def _load_image_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
             )
 
             dataset.add_sample(sample)
+            count += 1
 
 
 def _get_video_from_images(dataset_view):
@@ -310,13 +316,13 @@ def _get_video_from_images(dataset_view):
     return video_path
 
 
-def _load_video_dataset(dataset: fo.Dataset, davis_split_object: DAVIS):
+def _load_video_dataset(dataset: fo.Dataset, davis_split_object: DAVIS, max_samples=None):
     """
     Load the dataset object into the given FiftyOne dataset
     as a video dataset, with sequences as samples, and frame images as frames
     """
     image_dataset = fo.Dataset()
-    _load_image_dataset(image_dataset, davis_split_object)
+    _load_image_dataset(image_dataset, davis_split_object, max_samples=max_samples)
 
     image_dataset = image_dataset.group_by(
         "sequence_id", order_by="frame_number"
